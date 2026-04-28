@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import io
 from datetime import datetime
 
 class ModuloInventario:
@@ -8,19 +7,20 @@ class ModuloInventario:
         self.db = db
 
     def registrar_evento(self, accion, detalle):
-        """Registra la actividad en la tabla central de auditoría de MasterIT."""
+        """Registra la actividad en la tabla de auditoría central."""
         try:
-            usuario = st.session_state.get('usuario', 'Admin_Inventario')
+            user_info = st.session_state.get('user_data', {})
+            usuario = user_info.get('usuario', 'Admin_Inventario')
+            
             log_entry = {
-                "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "modulo": "INVENTARIO",
                 "usuario": usuario,
-                "accion": accion,
+                "accion": accion.upper(),
+                "modulo": "INVENTARIO",
                 "detalle": detalle
             }
-            self.db.client.table("logs").insert(log_entry).execute()
+            self.db.table("logs_sistema").insert(log_entry).execute()
         except Exception as e:
-            st.error(f"Error al sincronizar log con MasterIT: {e}")
+            print(f"Error en registro de log: {e}")
 
     def aplicar_estilo_semaforo(self, row):
         """Lógica visual: Rojo (<=15), Amarillo (16-50), Verde (>50)"""
@@ -42,19 +42,43 @@ class ModuloInventario:
         return estilos
 
     def render(self):
-        st.header("📦 Gestión de Inventario - DANA")
+        st.header("📦 Gestión de Inventario - SONIX LTD.")
         
-        # 1. Carga de datos
-        prods = self.db.fetch("productos")
-        df = pd.DataFrame(prods) if prods else pd.DataFrame()
+        # 1. CARGA Y LIMPIEZA CRÍTICA DE DATOS
+        try:
+            prods = self.db.table("productos").select("*").execute().data
+            df = pd.DataFrame(prods) if prods else pd.DataFrame()
+        except Exception as e:
+            st.error(f"Error de conexión: {e}")
+            return
         
         if not df.empty:
+            # --- PROTECCIÓN CONTRA ERROR DE STYLER ---
+            # Resetear índice para asegurar que sea único (0, 1, 2...)
+            df = df.reset_index(drop=True)
+            
+            # Convertir todas las columnas a MAYÚSCULAS
             df.columns = [c.upper() for c in df.columns]
-            df['ID'] = pd.to_numeric(df['ID'], errors='coerce').fillna(0).astype(int)
-            df['CANTIDAD'] = pd.to_numeric(df['CANTIDAD'], errors='coerce').fillna(0.0).astype(float)
-            df['COSTO UNIT'] = pd.to_numeric(df['COSTO UNIT'], errors='coerce').fillna(0.0).astype(float)
+            
+            # Eliminar columnas duplicadas (ej: si existía 'cantidad' y 'CANTIDAD')
+            df = df.loc[:, ~df.columns.duplicated()]
+            
+            # Mapeo de nombres de DB a nombres de visualización
+            mapeos = {
+                'COSTO_UNIT': 'COSTO UNIT',
+                'UBICACION': 'UBICACIÓN'
+            }
+            df.rename(columns=mapeos, inplace=True)
+
+            # Conversión de tipos de datos segura
+            df['ID'] = pd.to_numeric(df.get('ID'), errors='coerce').fillna(0).astype(int)
+            df['CANTIDAD'] = pd.to_numeric(df.get('CANTIDAD'), errors='coerce').fillna(0.0).astype(float)
+            df['COSTO UNIT'] = pd.to_numeric(df.get('COSTO UNIT'), errors='coerce').fillna(0.0).astype(float)
+            
+            # Calcular TOTAL dinámicamente
             df['TOTAL'] = df['CANTIDAD'] * df['COSTO UNIT']
 
+        # 2. TABS DE NAVEGACIÓN
         tab1, tab2, tab3 = st.tabs([
             "📋 Existencias Actuales", 
             "➕ Nuevo Producto", 
@@ -71,7 +95,7 @@ class ModuloInventario:
             if not df.empty:
                 self.seccion_edicion_busqueda(df)
             else:
-                st.info("No hay productos registrados para editar.")
+                st.info("No hay productos registrados.")
 
     def render_existencias(self, df):
         st.subheader("Control de Stock y Valorización")
@@ -95,15 +119,18 @@ class ModuloInventario:
                 df_v['REFERENCIA'].str.contains(busqueda, case=False, na=False)
             ]
         
-        cols_mostrar = ['ID', 'REFERENCIA', 'MARCA', 'TIPO', 'DESCRIPCION', 'UBICACIÓN', 'CANTIDAD', 'COSTO UNIT', 'TOTAL', 'EMPAQUE']
+        # Definir columnas a mostrar (solo las que existan realmente)
+        cols_finales = [c for c in ['ID', 'REFERENCIA', 'MARCA', 'TIPO', 'DESCRIPCION', 'UBICACIÓN', 'CANTIDAD', 'COSTO UNIT', 'TOTAL'] if c in df_v.columns]
+        
         st.dataframe(
-            df_v[cols_mostrar].style.apply(self.aplicar_estilo_semaforo, axis=1), 
+            df_v[cols_finales].style.apply(self.aplicar_estilo_semaforo, axis=1), 
             use_container_width=True, hide_index=True
         )
 
     def seccion_edicion_busqueda(self, df):
         st.subheader("Edición de Artículos")
-        opciones = {f"ID: {r['ID']} | {r['DESCRIPCION']}": r['ID'] for _, r in df.iterrows()}
+        # Diccionario para búsqueda rápida por ID
+        opciones = {f"ID: {r['ID']} | {r['REFERENCIA']} - {r['MARCA']}": r['ID'] for _, r in df.iterrows()}
         seleccion = st.selectbox("Seleccione artículo para editar:", ["-- Seleccione --"] + list(opciones.keys()))
 
         if seleccion != "-- Seleccione --":
@@ -125,21 +152,25 @@ class ModuloInventario:
                 n_costo = c6.number_input("Costo Unitario ($)", value=float(item.get('COSTO UNIT', 0)), format="%.2f")
                 
                 if st.form_submit_button("💾 Guardar Cambios", type="primary", use_container_width=True):
-                    self.db.client.table("productos").update({
-                        "REFERENCIA": n_ref, "MARCA": n_marca, "TIPO": n_tipo,
-                        "DESCRIPCION": n_desc, "UBICACIÓN": n_ubica, "CANTIDAD": n_cant,
-                        "COSTO UNIT": n_costo, "TOTAL": n_cant * n_costo
+                    # Guardar con nombres estandarizados de Supabase
+                    self.db.table("productos").update({
+                        "REFERENCIA": n_ref.strip().upper(), 
+                        "MARCA": n_marca.strip().upper(), 
+                        "TIPO": n_tipo.strip().upper(),
+                        "DESCRIPCION": n_desc.strip().upper(), 
+                        "UBICACION": n_ubica.strip().upper(),
+                        "CANTIDAD": n_cant,
+                        "COSTO_UNIT": n_costo,
+                        "TOTAL": n_cant * n_costo
                     }).eq("ID", id_sel).execute()
                     
                     self.registrar_evento("ACTUALIZACIÓN", f"ID {id_sel}: {n_desc}")
-                    st.success("✅ Cambios guardados.")
+                    st.success("✅ Cambios aplicados.")
                     st.rerun()
 
     def formulario_nuevo(self):
-        """Formulario de registro: EL ID SE OMITE PORQUE ES AUTO-GENERADO POR SUPABASE"""
-        with st.form("form_nuevo_identity", clear_on_submit=True):
+        with st.form("form_nuevo_inv", clear_on_submit=True):
             st.subheader("➕ Registro de Nuevo Producto")
-            st.caption("El ID será asignado automáticamente por el sistema.")
             
             c1, c2 = st.columns(2)
             ref = c1.text_input("Referencia")
@@ -152,24 +183,28 @@ class ModuloInventario:
             ubica = c4.text_input("Ubicación en Bodega")
             um = c5.text_input("U/M (Unidad, Par, Caja)")
             
-            c6, c7, c8 = st.columns(3)
+            c6, c7 = st.columns(2)
             cant = c6.number_input("Cantidad Inicial", min_value=0.0)
             costo = c7.number_input("Costo Unitario ($)", min_value=0.0, format="%.2f")
-            emp = c8.text_input("Detalle Empaque")
             
             if st.form_submit_button("🚀 Registrar en Inventario", use_container_width=True):
-                if not desc or not marca:
-                    st.error("❌ La Marca y la Descripción son obligatorias.")
+                if not desc or not ref:
+                    st.error("❌ Los campos Referencia y Descripción son obligatorios.")
                 else:
-                    # IMPORTANTE: No incluimos 'ID' en el diccionario para evitar el error 428C9
-                    nuevo_producto = {
-                        "REFERENCIA": ref, "MARCA": marca, "DESCRIPCION": desc,
-                        "TIPO": tipo, "UBICACIÓN": ubica, "CANTIDAD": cant, 
-                        "COSTO UNIT": costo, "TOTAL": cant * costo, 
-                        "EMPAQUE": emp, "U/M": um
+                    nuevo = {
+                        "REFERENCIA": ref.strip().upper(), 
+                        "MARCA": marca.strip().upper(), 
+                        "DESCRIPCION": desc.strip().upper(),
+                        "TIPO": tipo.strip().upper(), 
+                        "UBICACION": ubica.strip().upper(), 
+                        "CANTIDAD": cant, 
+                        "COSTO_UNIT": costo, 
+                        "TOTAL": cant * costo
                     }
-                    self.db.client.table("productos").insert(nuevo_producto).execute()
-                    
-                    self.registrar_evento("CREACIÓN", f"Nuevo producto registrado: {desc}")
-                    st.success("✅ Producto registrado exitosamente.")
-                    st.rerun()
+                    try:
+                        self.db.table("productos").insert(nuevo).execute()
+                        self.registrar_evento("CREACIÓN", f"Nuevo: {ref}")
+                        st.success("✅ Producto registrado.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar: {e}")

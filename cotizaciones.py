@@ -14,9 +14,9 @@ class ModuloCotizaciones:
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 8, "DANA INTERNACIONAL", ln=True, align="C")
+        pdf.cell(0, 8, "SONIX LTD.", ln=True, align="C")
         pdf.set_font("Arial", "", 8)
-        header = "RUC: 12440-181-123510 DV83 | CALLE 15 & 16, ZONA LIBRE DE COLÓN\nTEL: 446-1326 | gerencia@danainternacional.com"
+        header = "RUC: 000000000000 DV00 | CALLE 00000, ZONA LIBRE DE COLÓN\nTEL: 0000-00000 | gerencia@sonixltd.com"
         pdf.multi_cell(0, 4, header, align="C")
         pdf.ln(5)
 
@@ -57,9 +57,9 @@ class ModuloCotizaciones:
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 8, "DANA INTERNACIONAL", ln=True, align="C")
+        pdf.cell(0, 8, "SONIX LTD.", ln=True, align="C")
         pdf.set_font("Arial", "", 8)
-        header = "RUC: 12440-181-123510 DV83 | CALLE 15 & 16, ZONA LIBRE DE COLÓN"
+        header = "RUC: 000000000000 DV00 | CALLE 00000, ZONA LIBRE DE COLÓN"
         pdf.multi_cell(0, 4, header, align="C")
         pdf.ln(5)
 
@@ -162,7 +162,7 @@ class ModuloCotizaciones:
         except Exception as e: st.error(f"Error: {e}")
 
     def render(self):
-        st.header("📄 Cotizaciones DANA")
+        st.header("📄 Cotizaciones SONIX LTD.")
         tab1, tab2 = st.tabs(["🆕 Nueva", "📜 Historial"])
         with tab1: self.vista_crear()
         with tab2:

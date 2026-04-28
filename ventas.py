@@ -14,11 +14,11 @@ class ModuloVentas:
         
         # Encabezado
         pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 8, "DANA INTERNACIONAL S.A.", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, "SONIX LTD.", align="C", new_x="LMARGIN", new_y="NEXT")
         
         pdf.set_font("Arial", "", 8)
         tipo_doc = "OFFSHORE / EXPORT" if es_offshore else "LOCAL (ZONA LIBRE)"
-        header = f"RUC: 12440-181-123510 DV83 | COLÓN, PANAMÁ\n{tipo_doc}"
+        header = f"RUC: 000000000000 DV00 | COLÓN, PANAMÁ\n{tipo_doc}"
         pdf.multi_cell(0, 4, header, align="C")
         pdf.ln(5)
 
@@ -184,6 +184,7 @@ class ModuloVentas:
                     st.rerun()
 
     def render(self):
+        st.header("📄 Ventas SONIX LTD.")
         t1, t2, t3 = st.tabs(["🏢 ZLC", "🚢 Offshore", "📜 Historial"])
         with t1: self.formulario_venta(es_offshore=False)
         with t2: self.formulario_venta(es_offshore=True)
