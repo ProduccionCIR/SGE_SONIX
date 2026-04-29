@@ -41,30 +41,18 @@ class ModuloInventario:
         except Exception as e:
             st.error(f"Error de conexión: {e}")
             return
-        
+
         if not df.empty:
             df = df.reset_index(drop=True)
-            
-            # Estandarizamos columnas a MAYÚSCULAS para coincidir con tu DB
             df.columns = [c.upper() for c in df.columns]
             df = df.loc[:, ~df.columns.duplicated()]
-
-            # Mapeo visual
-            mapeos = {'COSTO_UNIT': 'COSTO UNIT', 'UBICACION': 'UBICACIÓN'}
-            df.rename(columns=mapeos, inplace=True)
-
-            # Conversión de tipos segura (Líneas separadas para Render)
-            df['ID'] = pd.to_numeric(df.get('ID'), errors='coerce').fillna(0).astype(int)
             
-            df['CANTIDAD'] = pd.to_numeric(df.get('CANTIDAD'), errors='coerce')
-            df['CANTIDAD'] = df['CANTIDAD'].fillna(0.0).astype(float)
-            
-            df['COSTO UNIT'] = pd.to_numeric(df.get('COSTO UNIT'), errors='coerce')
-            df['COSTO UNIT'] = df['COSTO UNIT'].fillna(0.0).astype(float)
-            
-            df['TOTAL'] = df['CANTIDAD'] * df['COSTO UNIT']
+            # Asegurar tipos de datos para cálculos
+            df['CANTIDAD'] = pd.to_numeric(df['CANTIDAD'], errors='coerce').fillna(0)
+            df['COSTO_UNIT'] = pd.to_numeric(df['COSTO_UNIT'], errors='coerce').fillna(0)
+            df['TOTAL'] = df['CANTIDAD'] * df['COSTO_UNIT']
 
-        tab1, tab2, tab3 = st.tabs(["📋 Existencias", "➕ Nuevo", "🛠️ Editar"])
+        tab1, tab2, tab3 = st.tabs(["📋 Existencias", "➕ Nuevo Producto", "🛠️ Editar Existente"])
 
         with tab1:
             self.render_existencias(df)
@@ -74,17 +62,17 @@ class ModuloInventario:
             if not df.empty:
                 self.seccion_edicion_busqueda(df)
             else:
-                st.info("No hay productos.")
+                st.info("No hay productos registrados.")
 
     def render_existencias(self, df):
         st.subheader("Control de Stock")
         if df.empty:
-            st.info("Inventario vacío.")
+            st.info("El inventario está vacío.")
             return
-
+        
         c1, c2 = st.columns([1, 2])
-        filtro = c1.selectbox("Filtrar:", ["Todos", "🔴 Crítico", "🟡 Atención", "🟢 Óptimo"])
-        busqueda = c2.text_input("🔍 Buscar:", key="inv_search_main")
+        filtro = c1.selectbox("Filtrar por Stock:", ["Todos", "🔴 Crítico", "🟡 Atención", "🟢 Óptimo"])
+        busqueda = c2.text_input("🔍 Buscar (Referencia o Descripción):", key="inv_search_main")
         
         df_v = df.copy()
         if "Crítico" in filtro: df_v = df_v[df_v['CANTIDAD'] <= 15]
@@ -92,57 +80,85 @@ class ModuloInventario:
         elif "Óptimo" in filtro: df_v = df_v[df_v['CANTIDAD'] > 50]
         
         if busqueda:
-            df_v = df_v[df_v['DESCRIPCION'].str.contains(busqueda, case=False, na=False)]
+            df_v = df_v[df_v['DESCRIPCION'].str.contains(busqueda, case=False, na=False) | 
+                        df_v['REFERENCIA'].str.contains(busqueda, case=False, na=False)]
         
-        cols = [c for c in ['ID', 'REFERENCIA', 'MARCA', 'DESCRIPCION', 'UBICACIÓN', 'CANTIDAD', 'COSTO UNIT', 'TOTAL'] if c in df_v.columns]
-        st.dataframe(df_v[cols].style.apply(self.aplicar_estilo_semaforo, axis=1), use_container_width=True, hide_index=True)
+        cols_mostrar = ['ID', 'REFERENCIA', 'MARCA', 'DESCRIPCION', 'TIPO', 'UBICACION', 'CANTIDAD', 'COSTO_UNIT', 'TOTAL']
+        st.dataframe(df_v[cols_mostrar].style.apply(self.aplicar_estilo_semaforo, axis=1), use_container_width=True, hide_index=True)
 
     def seccion_edicion_busqueda(self, df):
-        st.subheader("Edición")
-        opciones = {f"ID: {r['ID']} | {r['DESCRIPCION']}": r['ID'] for _, r in df.iterrows()}
-        seleccion = st.selectbox("Seleccione:", ["-- Seleccione --"] + list(opciones.keys()))
+        st.subheader("Edición de Artículos")
+        opciones = {f"REF: {r['REFERENCIA']} | {r['DESCRIPCION']} (ID: {r['ID']})": r['ID'] for _, r in df.iterrows()}
+        seleccion = st.selectbox("Seleccione producto para modificar:", ["-- Seleccione --"] + list(opciones.keys()))
 
         if seleccion != "-- Seleccione --":
             id_sel = opciones[seleccion]
             item = df[df['ID'] == id_sel].iloc[0]
 
-            with st.form("form_edit_v4"):
-                st.info(f"Editando Registro ID: {id_sel}")
-                n_ref = st.text_input("Referencia", value=str(item.get('REFERENCIA', '')))
-                n_desc = st.text_input("Descripción", value=str(item.get('DESCRIPCION', '')))
+            with st.form("form_edit_full"):
+                st.info(f"Modificando ID: {id_sel}")
                 c1, c2 = st.columns(2)
-                n_cant = c1.number_input("Cantidad", value=float(item.get('CANTIDAD', 0)))
-                n_costo = c2.number_input("Costo ($)", value=float(item.get('COSTO UNIT', 0)))
+                n_ref = c1.text_input("Referencia", value=str(item.get('REFERENCIA', '')))
+                n_marca = c2.text_input("Marca", value=str(item.get('MARCA', '')))
                 
-                if st.form_submit_button("💾 Guardar Cambios"):
-                    # USANDO MAYÚSCULAS PARA COINCIDIR CON TU DB MANUAL
+                n_desc = st.text_input("Descripción", value=str(item.get('DESCRIPCION', '')))
+                
+                c3, c4 = st.columns(2)
+                n_tipo = c3.text_input("Tipo", value=str(item.get('TIPO', '')))
+                n_ubic = c4.text_input("Ubicación", value=str(item.get('UBICACION', '')))
+                
+                c5, c6 = st.columns(2)
+                n_cant = c5.number_input("Cantidad", value=float(item.get('CANTIDAD', 0)))
+                n_costo = c6.number_input("Costo Unitario", value=float(item.get('COSTO_UNIT', 0)))
+
+                if st.form_submit_button("💾 Actualizar Producto"):
                     self.db.table("productos").update({
                         "REFERENCIA": n_ref.upper(),
+                        "MARCA": n_marca.upper(),
                         "DESCRIPCION": n_desc.upper(),
+                        "TIPO": n_tipo.upper(),
+                        "UBICACION": n_ubic.upper(),
                         "CANTIDAD": n_cant,
                         "COSTO_UNIT": n_costo,
                         "TOTAL": n_cant * n_costo
                     }).eq("ID", id_sel).execute()
                     
-                    st.success("✅ Datos actualizados en base de datos (MAYÚSCULAS).")
+                    self.registrar_evento("ACTUALIZACIÓN", f"REF {n_ref} ID {id_sel}")
+                    st.success("✅ Cambios guardados.")
                     st.rerun()
 
     def formulario_nuevo(self):
-        with st.form("form_nuevo_v4"):
-            st.subheader("Nuevo Producto")
-            f_ref = st.text_input("Referencia")
-            f_desc = st.text_input("Descripción")
-            f_cant = st.number_input("Cantidad", min_value=0.0)
-            f_costo = st.number_input("Costo", min_value=0.0)
+        with st.form("form_nuevo_full", clear_on_submit=True):
+            st.subheader("➕ Registro de Producto")
+            c1, c2 = st.columns(2)
+            f_ref = c1.text_input("Referencia *")
+            f_marca = c2.text_input("Marca")
             
-            if st.form_submit_button("🚀 Registrar"):
-                self.db.table("productos").insert({
-                    "REFERENCIA": f_ref.upper(),
-                    "DESCRIPCION": f_desc.upper(),
-                    "CANTIDAD": f_cant,
-                    "COSTO_UNIT": f_costo,
-                    "TOTAL": f_cant * f_costo
-                }).execute()
-                st.success("✅ Producto creado con éxito.")
-                st.rerun()
-                
+            f_desc = st.text_input("Descripción *")
+            
+            c3, c4 = st.columns(2)
+            f_tipo = c3.text_input("Tipo (Ej: Repuesto, Herramienta)")
+            f_ubic = c4.text_input("Ubicación en Bodega")
+            
+            c5, c6 = st.columns(2)
+            f_cant = c5.number_input("Cantidad Inicial", min_value=0.0, step=1.0)
+            f_costo = c6.number_input("Costo Unitario ($)", min_value=0.0)
+
+            if st.form_submit_button("🚀 Guardar en Base de Datos"):
+                if f_ref and f_desc:
+                    nuevo_prod = {
+                        "REFERENCIA": f_ref.upper(),
+                        "MARCA": f_marca.upper(),
+                        "DESCRIPCION": f_desc.upper(),
+                        "TIPO": f_tipo.upper(),
+                        "UBICACION": f_ubic.upper(),
+                        "CANTIDAD": f_cant,
+                        "COSTO_UNIT": f_costo,
+                        "TOTAL": f_cant * f_costo
+                    }
+                    self.db.table("productos").insert(nuevo_prod).execute()
+                    self.registrar_evento("CREACIÓN", f"Nuevo REF: {f_ref}")
+                    st.success("✅ Producto registrado exitosamente.")
+                    st.rerun()
+                else:
+                    st.error("❌ Referencia y Descripción son obligatorios.")
