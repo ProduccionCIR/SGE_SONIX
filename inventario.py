@@ -102,7 +102,7 @@ def seccion_edicion_busqueda(self, df):
         id_sel = opciones[seleccion]
         item = df[df['ID'] == id_sel].iloc[0]
 
-        with st.form("form_edit_v6"):
+        with st.form("form_edit_v_final"):
             st.info(f"Modificando Registro ID: {id_sel}")
             n_ref = st.text_input("Referencia", value=str(item.get('REFERENCIA', '')))
             n_desc = st.text_input("Descripción", value=str(item.get('DESCRIPCION', '')))
@@ -124,7 +124,7 @@ def seccion_edicion_busqueda(self, df):
                 st.rerun()
 
 def formulario_nuevo(self):
-    with st.form("form_nuevo_v6", clear_on_submit=True):
+    with st.form("form_nuevo_v_final", clear_on_submit=True):
         st.subheader("➕ Registro de Nuevo Producto")
         f_ref = st.text_input("Referencia")
         f_desc = st.text_input("Descripción")
