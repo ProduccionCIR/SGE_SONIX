@@ -71,7 +71,7 @@ class ModuloInventario:
             df.rename(columns=mapeos, inplace=True)
 
             # Conversión de tipos de datos segura
-            df['ID'] = pd.to_numeric(df.get('ID'), errors='coerce').fillna(0).astype(int)
+            df['id'] = pd.to_numeric(df.get('id'), errors='coerce').fillna(0).astype(int)
             df['CANTIDAD'] = pd.to_numeric(df.get('CANTIDAD'), errors='coerce').fillna(0.0).astype(float)
             df['COSTO UNIT'] = pd.to_numeric(df.get('COSTO UNIT'), errors='coerce').fillna(0.0).astype(float)
             
