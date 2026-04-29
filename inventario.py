@@ -3,8 +3,8 @@ import pandas as pd
 from datetime import datetime
 
 class ModuloInventario:
-    def init(self, db):
-        self.db = db
+def init(self, db):
+self.db = db
 
 def registrar_evento(self, accion, detalle):
     try:
@@ -146,5 +146,3 @@ def formulario_nuevo(self):
                 self.db.table("productos").insert(nuevo).execute()
                 st.success("✅ Producto registrado.")
                 st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al guardar: {e}")
