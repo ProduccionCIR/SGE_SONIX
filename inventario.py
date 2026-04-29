@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 
 class ModuloInventario:
-    def init(self, db):
+    def __init__(self, db):
         self.db = db
 
 def registrar_evento(self, accion, detalle):
