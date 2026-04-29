@@ -47,10 +47,7 @@ def render(self):
         df.columns = [c.upper() for c in df.columns]
         df = df.loc[:, ~df.columns.duplicated()]
 
-        mapeos = {
-            'COSTO_UNIT': 'COSTO UNIT',
-            'UBICACION': 'UBICACIÓN'
-        }
+        mapeos = {'COSTO_UNIT': 'COSTO UNIT', 'UBICACION': 'UBICACIÓN'}
         df.rename(columns=mapeos, inplace=True)
 
         df['ID'] = pd.to_numeric(df.get('ID'), errors='coerce').fillna(0).astype(int)
@@ -76,7 +73,7 @@ def render(self):
             st.info("No hay productos.")
 
 def render_existencias(self, df):
-    st.subheader("Control de Stock y Valorización")
+    st.subheader("Control de Stock")
     if df.empty:
         st.info("El inventario está vacío.")
         return
@@ -105,11 +102,10 @@ def seccion_edicion_busqueda(self, df):
         id_sel = opciones[seleccion]
         item = df[df['ID'] == id_sel].iloc[0]
 
-        with st.form("form_edit_v5"):
+        with st.form("form_edit_v6"):
             st.info(f"Modificando Registro ID: {id_sel}")
             n_ref = st.text_input("Referencia", value=str(item.get('REFERENCIA', '')))
             n_desc = st.text_input("Descripción", value=str(item.get('DESCRIPCION', '')))
-            
             c1, c2 = st.columns(2)
             n_cant = c1.number_input("Cantidad", value=float(item.get('CANTIDAD', 0)))
             n_costo = c2.number_input("Costo ($)", value=float(item.get('COSTO UNIT', 0)))
@@ -124,22 +120,21 @@ def seccion_edicion_busqueda(self, df):
                 }).eq("ID", id_sel).execute()
                 
                 self.registrar_evento("ACTUALIZACIÓN", f"ID {id_sel}: {n_desc}")
-                st.success("✅ Cambios aplicados con éxito.")
+                st.success("✅ Cambios aplicados.")
                 st.rerun()
 
 def formulario_nuevo(self):
-    with st.form("form_nuevo_v5", clear_on_submit=True):
+    with st.form("form_nuevo_v6", clear_on_submit=True):
         st.subheader("➕ Registro de Nuevo Producto")
         f_ref = st.text_input("Referencia")
         f_desc = st.text_input("Descripción")
-        
         c1, c2 = st.columns(2)
         f_cant = c1.number_input("Cantidad Inicial", min_value=0.0)
         f_costo = c2.number_input("Costo Unitario ($)", min_value=0.0)
         
-        if st.form_submit_button("🚀 Registrar en Inventario"):
+        if st.form_submit_button("🚀 Registrar"):
             if not f_desc or not f_ref:
-                st.error("❌ Referencia y Descripción son obligatorios.")
+                st.error("❌ Referencia y Descripción obligatorios.")
             else:
                 nuevo = {
                     "REFERENCIA": f_ref.strip().upper(),
@@ -149,7 +144,6 @@ def formulario_nuevo(self):
                     "TOTAL": f_cant * f_costo
                 }
                 self.db.table("productos").insert(nuevo).execute()
-                self.registrar_evento("CREACIÓN", f"Nuevo: {f_ref}")
                 st.success("✅ Producto registrado.")
                 st.rerun()
                     except Exception as e:
